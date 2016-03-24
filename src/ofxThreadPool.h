@@ -18,9 +18,26 @@
 #include "ofEvents.h"
 #include "ofLog.h"
 
+#include "ofConstants.h"
+
+#define OFX_MAKE_OF_VERSION(major, minor, patch) (major * 10000 + minor * 100 + patch)
+#define OFX_THIS_OF_VERSION OFX_MAKE_OF_VERSION(OF_VERSION_MAJOR, OF_VERSION_MINOR, OF_VERSION_PATCH)
+#define OFX_THIS_OF_IS_OLDER_THAN(major, minor, patch) (OFX_OF_VERSION < OFX_MAKE_OF_VERSION(major, minor, patch))
+#define OFX_THIS_OF_IS_OLDER_THAN_EQ(major, minor, patch) (OFX_OF_VERSION <= OFX_MAKE_OF_VERSION(major, minor, patch))
+#define OFX_THIS_OF_IS_NEWER_THAN(major, minor, patch) (OFX_MAKE_OF_VERSION(major, minor, patch) < OFX_OF_VERSION)
+#define OFX_THIS_OF_IS_NEWER_THAN_EQ(major, minor, patch) (OFX_MAKE_OF_VERSION(major, minor, patch) <= OFX_OF_VERSION)
+
+#define IS_THREAD_CHANNEL_MOVE_CORRECT OFX_THIS_OF_IS_NEWER_THAN(0, 9, 2)
+
+#if IS_THREAD_CHANNEL_MOVE_CORRECT
+#   define THREAD_CHANNEL_MOVE(x) std::move(x)
+#else
+#   define THREAD_CHANNEL_MOVE(x) x
+#endif
+
 template <typename Material, typename Result>
 struct ofxThreadPool {
-    using ThreadProcess    = std::function<Result(Material &)>;
+    using ThreadProcess    = std::function<Result(Material &&)>;
     using CompleteCallback = std::function<void(Result &&)>;
     
     ofxThreadPool() {}
@@ -54,10 +71,10 @@ struct ofxThreadPool {
         material.send(m);
     }
     
-#if 902 < (OF_VERSION_MAJOR * 10000 + OF_VERSION_MINOR * 100 + OF_VERSION_PATCH)
+#if IS_THREAD_CHANNEL_MOVE_CORRECT
     void push(Material &&m) {
         ++queued_count;
-        material.send(m);
+        material.send(std::move(m));
     }
 #endif
     
@@ -73,7 +90,7 @@ struct ofxThreadPool {
                 Material m;
                 while(is_running && is_running_at[i]) {
                     if(material.tryReceive(m)) {
-                        processed.send(std::move(this->thread_process(m)));
+                        processed.send(THREAD_CHANNEL_MOVE(thread_process(std::move(m))));
                     }
                 }
             });
@@ -97,7 +114,7 @@ struct ofxThreadPool {
                 Material m;
                 while(is_running && is_running_at[i]) {
                     if(material.tryReceive(m)) {
-                        processed.send(std::move(this->thread_process(m)));
+                        processed.send(THREAD_CHANNEL_MOVE(thread_process(std::move(m))));
                     }
                 }
             });
@@ -169,3 +186,5 @@ private:
         ofRemoveListener(ofEvents().update, this, &ofxThreadPool::update);
     }
 };
+
+#undef THREAD_CHANNEL_MOVE

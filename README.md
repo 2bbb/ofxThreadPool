@@ -15,7 +15,7 @@ easy thread pool with lambda
 
 ### ofxThreadPool<Material, Result>::ThreadProcess
 
-`using ThreadProcess = std::function<Result(Material &)>;`
+`using ThreadProcess = std::function<Result(Material &&)>;`
 
 ### ofxThreadPool<Material, Result>::CompleteCallback
 
